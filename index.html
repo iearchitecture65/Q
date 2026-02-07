@@ -890,7 +890,8 @@
             window.state.modal.show = false; 
             render(); 
         };
-        const openQRModal = (id, name) => { window.state.showQRModal = { id, name }; render(); };
+        // FIXED: Added window.saveScrollPosition() to prevent jumping
+        const openQRModal = (id, name) => { window.saveScrollPosition(); window.state.showQRModal = { id, name }; render(); };
         const closeQRModal = () => { window.state.showQRModal = null; render(); };
         
         const requestCameraPermission = (mode) => {
@@ -1250,6 +1251,19 @@
                             ${slots.map(s => {
                                 const b = resBookings.find(x => x.slot === s.start);
                                 if (b) {
+                                    // FIXED: Handle completed state display in public view
+                                    if (b.status === 'completed') {
+                                        return `
+                                            <div class="p-5 bg-slate-100 rounded-[2rem] border border-slate-200 flex justify-between items-center opacity-80">
+                                                <div class="text-left">
+                                                    <p class="text-sm font-black text-slate-500 leading-none">${s.start} - ${s.end}</p>
+                                                    <p class="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">ใช้งานเสร็จสิ้น (${b.studentId})</p>
+                                                    <p class="text-[8px] text-slate-400 font-medium mt-1 uppercase">เวลาจอง: ${formatDateTime(b.createdAt)}</p>
+                                                </div>
+                                                <div class="w-10 h-10 bg-slate-200 text-slate-400 rounded-full flex items-center justify-center"><i data-lucide="check-circle" size="18"></i></div>
+                                            </div>
+                                        `;
+                                    }
                                     return `
                                         <div class="p-5 bg-white rounded-[2rem] border border-slate-100 flex justify-between items-center shadow-sm">
                                             <div class="text-left">
@@ -1717,7 +1731,8 @@
                                         <i data-lucide="calendar-off" size="18"></i> เช็คอินได้เฉพาะวันที่จอง
                                     </button>
                                 `}
-                                <button onclick="window.setView('selection'); window.state.selectedResource=null; window.render();" class="text-[9px] font-bold text-slate-400 uppercase tracking-widest py-2 hover:text-indigo-500 transition-colors">กลับหน้าหลัก</button>
+                                <!-- FIXED: Clear activeBookings and selectedSlots to prevent stale state -->
+                                <button onclick="window.state.activeBookings=[]; window.state.selectedSlots=[]; window.setView('selection'); window.state.selectedResource=null; window.render();" class="text-[9px] font-bold text-slate-400 uppercase tracking-widest py-2 hover:text-indigo-500 transition-colors">กลับหน้าหลัก</button>
                             </div>
                         </div>
                     </div>
@@ -1912,8 +1927,9 @@
 
         function renderStickyAction() {
             if (window.state.view === 'calendar' && window.state.selectedSlots.length > 0) {
+                // FIXED: Changed z-index from z-40 to z-[60]
                 return `
-                    <div class="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-0 right-0 px-6 z-40 max-w-xl mx-auto animate-in slide-in-from-bottom-20 flex flex-col items-center">
+                    <div class="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-0 right-0 px-6 z-[60] max-w-xl mx-auto animate-in slide-in-from-bottom-20 flex flex-col items-center">
                         <button onclick="window.confirmBookingAction()" class="w-full max-w-sm py-3 bg-indigo-600 text-white font-black rounded-full shadow-2xl transition-all active:scale-95 text-sm flex items-center justify-center gap-3 border-b-4 border-indigo-900 hover:brightness-110 text-center">
                             <i data-lucide="lock-keyhole" size="18"></i>
                             ยืนยันจอง ${window.state.selectedSlots.length} ช่วงเวลา
