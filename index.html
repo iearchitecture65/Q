@@ -1320,9 +1320,9 @@
                     <div class="bg-indigo-600 p-6 rounded-[2.5rem] text-white shadow-xl flex items-center gap-4">
                          <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0"><i data-lucide="box" size="24"></i></div>
                          <div class="text-left overflow-hidden">
-                            <h2 class="text-xl font-black leading-none uppercase truncate">${window.state.selectedResource.name}</h2>
+                            <h2 class="text-xl font-black leading-normal uppercase truncate pt-1">${window.state.selectedResource.name}</h2>
                             <!-- Added Description Here -->
-                            <p class="text-[10px] font-medium text-indigo-100 mt-1 opacity-90 truncate">${window.state.selectedResource.description || 'ไม่มีคำอธิบาย'}</p>
+                            <p class="text-[10px] font-medium text-indigo-100 mt-0 opacity-90 truncate">${window.state.selectedResource.description || 'ไม่มีคำอธิบาย'}</p>
                          </div>
                     </div>
 
@@ -1554,9 +1554,9 @@
                                         <i data-lucide="map-pin" size="22"></i>
                                     </div>
                                     <div class="text-left overflow-hidden">
-                                        <h3 class="font-bold text-base text-slate-800 leading-tight truncate">${res.name}</h3>
+                                        <h3 class="font-bold text-base text-slate-800 leading-normal truncate pt-1">${res.name}</h3>
                                         <!-- Added Description Here -->
-                                        ${res.description ? `<p class="text-[10px] text-slate-500 mt-0.5 truncate font-medium">${res.description}</p>` : ''}
+                                        ${res.description ? `<p class="text-[10px] text-slate-500 mt-0 truncate font-medium">${res.description}</p>` : ''}
                                         <div class="flex items-center gap-2 mt-2 leading-none">
                                             <div class="w-2 h-2 rounded-full ${res.status === 'in_use' ? 'bg-orange-400 animate-pulse' : 'bg-green-400'}"></div>
                                             <span class="text-[9px] font-bold uppercase tracking-widest ${res.status === 'in_use' ? 'text-orange-500' : 'text-green-500'}">
