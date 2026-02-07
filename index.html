@@ -175,6 +175,7 @@
             modal: { show: false, title: '', message: '', type: 'info', onConfirm: null },
             showQRModal: null,
             showHistoryModal: false, // New State for History Popup
+            editingResource: null, // New State for Edit Resource Modal
             isScanning: false,
             isProcessingScan: false,
             whitelistLocked: true, 
@@ -391,8 +392,11 @@
             });
         };
 
-        const selectResource = (id, name) => { 
-            window.state.selectedResource = { id, name }; 
+        // Modified: selectResource now takes only ID and looks up full object to ensure description is present
+        const selectResource = (id) => { 
+            const res = window.state.resources.find(r => r.id === id);
+            if (!res) return;
+            window.state.selectedResource = { ...res }; 
             window.state.selectedSlots = [];
             window.state.view = 'calendar'; 
             window.state.lastScrollTop = 0;
@@ -405,7 +409,15 @@
              const booking = window.state.bookings.find(b => b.date === dateStr && b.studentId === window.state.studentId);
              
              if (booking) {
-                 window.state.selectedResource = { id: booking.resourceId, name: booking.resourceName };
+                 // Try to find current resource info to get description
+                 const currentRes = window.state.resources.find(r => r.id === booking.resourceId);
+                 if (currentRes) {
+                     window.state.selectedResource = { ...currentRes };
+                 } else {
+                     // Fallback if resource was deleted
+                     window.state.selectedResource = { id: booking.resourceId, name: booking.resourceName, description: '' };
+                 }
+                 
                  window.state.selectedDate = dateStr;
                  window.state.view = 'calendar';
                  window.state.lastScrollTop = 0;
@@ -414,7 +426,7 @@
              } else {
                  if (window.state.resources.length > 0) {
                      const r = window.state.resources[0];
-                     window.state.selectedResource = { id: r.id, name: r.name };
+                     window.state.selectedResource = { ...r };
                      window.state.selectedDate = dateStr;
                      window.state.view = 'calendar';
                      window.render();
@@ -575,8 +587,6 @@
                 await updateDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'bookings', b.id), { status: 'checked_in', checkInAt: nowISO });
             }
             await updateDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'resources', resId), { status: 'in_use', currentStudent: window.state.studentId, startedAt: nowISO });
-            
-            // ไม่ต้องมี uiAlert เพื่อให้ UI เปลี่ยนทันทีแบบ Seamless
         };
 
         const processCheckOut = async (resId) => {
@@ -606,8 +616,6 @@
                 await updateDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'bookings', b.id), { status: 'completed', checkOutAt: nowISO });
             }
             await updateDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'resources', resId), { status: 'idle', currentStudent: null, startedAt: null });
-            
-            // ไม่ต้องมี uiAlert
         };
 
         const saveSettings = async (e) => {
@@ -676,7 +684,13 @@
             window.saveScrollPosition();
 
             const name = e.target.resName.value.trim();
-            if (name) await addDoc(collection(db, 'artifacts', fbId, 'public', 'data', 'resources'), { name, status: 'idle', order: Date.now() });
+            const description = e.target.resDesc.value.trim(); // รับค่า Description
+            if (name) await addDoc(collection(db, 'artifacts', fbId, 'public', 'data', 'resources'), { 
+                name, 
+                description, 
+                status: 'idle', 
+                order: Date.now() 
+            });
             e.target.reset();
         };
 
@@ -685,11 +699,34 @@
             await deleteDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'resources', id));
         });
         
-        const editResource = (id, currentName) => {
+        // --- NEW: Edit Resource Functions (Modal Based) ---
+        const openEditResourceModal = (id) => {
             window.saveScrollPosition();
-            const newName = prompt("แก้ไขชื่อจุดใช้งาน:", currentName);
-            if (newName && newName.trim() !== "") {
-                updateDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'resources', id), { name: newName.trim() });
+            const res = window.state.resources.find(r => r.id === id);
+            if(res) {
+                window.state.editingResource = { ...res };
+                window.render();
+            }
+        };
+
+        const closeEditResourceModal = () => {
+            window.state.editingResource = null;
+            window.render();
+        };
+
+        const saveEditResource = async (e) => {
+            e.preventDefault();
+            const id = window.state.editingResource.id;
+            const newName = e.target.editResName.value.trim();
+            const newDesc = e.target.editResDesc.value.trim();
+
+            if (newName) {
+                await updateDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'resources', id), { 
+                    name: newName,
+                    description: newDesc 
+                });
+                window.state.editingResource = null;
+                window.uiAlert("บันทึกการแก้ไขเรียบร้อย");
             }
         };
 
@@ -1008,6 +1045,7 @@
                 ${renderUIModal()}
                 ${renderQRModalDisplay()}
                 ${renderHistoryModal()}
+                ${renderEditResourceModal()} 
                 ${loadingOverlay}
             `;
 
@@ -1280,10 +1318,11 @@
                     <button onclick="window.setView('selection'); window.state.selectedResource=null; window.render();" class="flex items-center gap-2 text-slate-400 hover:text-indigo-600 text-[10px] font-bold uppercase tracking-widest"><i data-lucide="arrow-left" size="14"></i> เปลี่ยนจุดใช้งาน</button>
                     
                     <div class="bg-indigo-600 p-6 rounded-[2.5rem] text-white shadow-xl flex items-center gap-4">
-                         <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center"><i data-lucide="box" size="24"></i></div>
-                         <div class="text-left">
-                            <h2 class="text-xl font-black leading-none uppercase">${window.state.selectedResource.name}</h2>
-                            <p class="text-[9px] font-bold text-indigo-200 uppercase tracking-widest mt-2">Manage Your Bookings</p>
+                         <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0"><i data-lucide="box" size="24"></i></div>
+                         <div class="text-left overflow-hidden">
+                            <h2 class="text-xl font-black leading-none uppercase truncate">${window.state.selectedResource.name}</h2>
+                            <!-- Added Description Here -->
+                            <p class="text-[10px] font-medium text-indigo-100 mt-1.5 opacity-90 truncate">${window.state.selectedResource.description || 'ไม่มีคำอธิบาย'}</p>
                          </div>
                     </div>
 
@@ -1509,14 +1548,16 @@
                     <div id="resource-list" class="grid grid-cols-1 gap-4">
                         <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 leading-none">เลือกทรัพยากรเพื่อดำเนินการจอง</div>
                         ${window.state.resources.map(res => `
-                            <button onclick="window.selectResource('${res.id}', '${res.name}')" class="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-lg hover:border-indigo-200 transition-all text-left flex items-center justify-between active:scale-[0.99] ${res.status === 'in_use' ? 'opacity-90' : ''} ${!isSystemOpen ? 'opacity-50 pointer-events-none grayscale' : ''}">
-                                <div class="flex items-center gap-5">
-                                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${res.status === 'in_use' ? 'bg-orange-50 text-orange-500' : 'bg-slate-50 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white'}">
+                            <button onclick="window.selectResource('${res.id}')" class="group bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-lg hover:border-indigo-200 transition-all text-left flex items-center justify-between active:scale-[0.99] ${res.status === 'in_use' ? 'opacity-90' : ''} ${!isSystemOpen ? 'opacity-50 pointer-events-none grayscale' : ''}">
+                                <div class="flex items-center gap-5 overflow-hidden">
+                                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center transition-all flex-shrink-0 ${res.status === 'in_use' ? 'bg-orange-50 text-orange-500' : 'bg-slate-50 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white'}">
                                         <i data-lucide="map-pin" size="22"></i>
                                     </div>
-                                    <div class="text-left">
-                                        <h3 class="font-bold text-base text-slate-800 leading-tight">${res.name}</h3>
-                                        <div class="flex items-center gap-2 mt-3 leading-none">
+                                    <div class="text-left overflow-hidden">
+                                        <h3 class="font-bold text-base text-slate-800 leading-tight truncate">${res.name}</h3>
+                                        <!-- Added Description Here -->
+                                        ${res.description ? `<p class="text-[10px] text-slate-500 mt-1 truncate font-medium">${res.description}</p>` : ''}
+                                        <div class="flex items-center gap-2 mt-2 leading-none">
                                             <div class="w-2 h-2 rounded-full ${res.status === 'in_use' ? 'bg-orange-400 animate-pulse' : 'bg-green-400'}"></div>
                                             <span class="text-[9px] font-bold uppercase tracking-widest ${res.status === 'in_use' ? 'text-orange-500' : 'text-green-500'}">
                                                 ${res.status === 'in_use' ? `In Use by ${res.currentStudent}` : 'พร้อมใช้งาน'}
@@ -1524,7 +1565,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <i data-lucide="chevron-right" size="20" class="text-slate-200 group-hover:text-indigo-600 transition-all"></i>
+                                <i data-lucide="chevron-right" size="20" class="text-slate-200 group-hover:text-indigo-600 transition-all flex-shrink-0"></i>
                             </button>
                         `).join('')}
                     </div>
@@ -1785,23 +1826,37 @@
                     
                     <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6 text-left">
                         <h2 class="text-xl font-black text-slate-800 flex items-center gap-3 text-left leading-none"><i data-lucide="box" class="text-indigo-600"></i> Manage Resources</h2>
-                        <form onsubmit="window.addRes(event)" class="flex gap-3 text-left"><input name="resName" placeholder="ระบุชื่อจุดใช้งาน..." class="flex-1 p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 font-bold text-sm outline-none shadow-inner text-left" required><button type="submit" class="px-8 bg-slate-900 text-white font-bold rounded-2xl text-[10px] uppercase shadow-lg text-center">เพิ่ม</button></form>
+                        
+                        <!-- Modified Form with Description -->
+                        <form onsubmit="window.addRes(event)" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-left">
+                            <div class="md:col-span-2 flex gap-3">
+                                <input name="resName" placeholder="ระบุชื่อจุดใช้งาน..." class="flex-1 p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 font-bold text-sm outline-none shadow-inner text-left" required>
+                            </div>
+                            <div class="md:col-span-2 flex gap-3">
+                                <input name="resDesc" placeholder="คำอธิบาย (เช่น ชั้น 2, มีโปรเจคเตอร์)" class="flex-1 p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 font-medium text-sm outline-none shadow-inner text-left">
+                                <button type="submit" class="px-8 bg-slate-900 text-white font-bold rounded-2xl text-[10px] uppercase shadow-lg text-center flex-none">เพิ่ม</button>
+                            </div>
+                        </form>
+
                         <div class="grid grid-cols-1 gap-3 text-left">
                             ${window.state.resources.map((res, index) => `
                                 <div class="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
-                                    <div class="flex items-center gap-3 text-left">
-                                        <div class="flex flex-col gap-1 mr-2">
+                                    <div class="flex items-center gap-3 text-left overflow-hidden">
+                                        <div class="flex flex-col gap-1 mr-2 flex-shrink-0">
                                             <button onclick="window.moveResource('${res.id}', 'up')" class="p-1 text-slate-300 hover:text-indigo-600 disabled:opacity-30 transition-all" ${index === 0 ? 'disabled' : ''}><i data-lucide="chevron-up" size="14"></i></button>
                                             <button onclick="window.moveResource('${res.id}', 'down')" class="p-1 text-slate-300 hover:text-indigo-600 disabled:opacity-30 transition-all" ${index === window.state.resources.length - 1 ? 'disabled' : ''}><i data-lucide="chevron-down" size="14"></i></button>
                                         </div>
-                                        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-300 border border-slate-100 text-center"><i data-lucide="box" size="20"></i></div>
-                                        <div class="text-left">
-                                            <p class="font-black text-slate-800 text-sm leading-none text-left">${res.name}</p>
-                                            <p class="text-[8px] text-slate-400 font-bold uppercase mt-1.5 text-left">UID: ${res.id.substring(0,6)}...</p>
+                                        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-300 border border-slate-100 text-center flex-shrink-0"><i data-lucide="box" size="20"></i></div>
+                                        <div class="text-left overflow-hidden">
+                                            <p class="font-black text-slate-800 text-sm leading-none text-left truncate">${res.name}</p>
+                                            <!-- Added Description Display -->
+                                            ${res.description ? `<p class="text-[10px] text-slate-500 mt-1 truncate font-medium">${res.description}</p>` : ''}
+                                            <p class="text-[8px] text-slate-400 font-bold uppercase mt-1 text-left">UID: ${res.id.substring(0,6)}...</p>
                                         </div>
                                     </div>
                                     <div class="flex gap-1 text-left shrink-0">
-                                        <button onclick="window.editResource('${res.id}', '${res.name}')" class="p-2 bg-white text-slate-400 hover:text-indigo-600 rounded-xl shadow-md border border-slate-100 active:scale-90 text-center"><i data-lucide="pencil" size="16"></i></button>
+                                        <!-- Changed Edit Action -->
+                                        <button onclick="window.openEditResourceModal('${res.id}')" class="p-2 bg-white text-slate-400 hover:text-indigo-600 rounded-xl shadow-md border border-slate-100 active:scale-90 text-center"><i data-lucide="pencil" size="16"></i></button>
                                         <button onclick="window.openQRModal('${res.id}', '${res.name}')" class="p-2 bg-white text-indigo-600 rounded-xl shadow-md border border-slate-100 active:scale-90 text-center"><i data-lucide="qr-code" size="16"></i></button>
                                         <button onclick="window.deleteResource('${res.id}')" class="p-2 bg-white text-red-400 rounded-xl shadow-md border border-slate-100 active:scale-90 text-center"><i data-lucide="trash-2" size="16"></i></button>
                                     </div>
@@ -1901,6 +1956,35 @@
                 </div>
             `;
         }
+        
+        // --- NEW: Edit Resource Modal ---
+        function renderEditResourceModal() {
+            if (!window.state.editingResource) return "";
+            return `
+                <div class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-8 page-transition">
+                    <div class="bg-white rounded-[2.5rem] p-10 max-w-sm w-full text-center shadow-2xl border border-white relative animate-in zoom-in duration-200">
+                        <button onclick="window.closeEditResourceModal()" class="absolute -top-3 -right-3 w-10 h-10 bg-white text-slate-800 rounded-full shadow-lg flex items-center justify-center border border-slate-100 active:scale-90 transition-transform"><i data-lucide="x" size="20"></i></button>
+                        
+                        <div class="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                            <i data-lucide="pencil" size="28"></i>
+                        </div>
+                        <h3 class="text-lg font-black text-slate-800 mb-6 leading-tight">แก้ไขข้อมูลทรัพยากร</h3>
+                        
+                        <form onsubmit="window.saveEditResource(event)" class="space-y-4 text-left">
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">ชื่อจุดใช้งาน</label>
+                                <input name="editResName" type="text" value="${window.state.editingResource.name}" class="w-full p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 font-bold text-sm outline-none focus:border-indigo-500 shadow-inner" required>
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">คำอธิบาย</label>
+                                <input name="editResDesc" type="text" value="${window.state.editingResource.description || ''}" class="w-full p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 font-medium text-sm outline-none focus:border-indigo-500 shadow-inner">
+                            </div>
+                            <button type="submit" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg border-b-4 border-indigo-900 mt-4 active:scale-95 transition-all">บันทึกการแก้ไข</button>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
 
         function renderHistoryModal() {
             if (!window.state.showHistoryModal) return "";
@@ -1990,7 +2074,6 @@
         window.render = render;
         window.toggleHistoryItem = toggleHistoryItem;
         window.clearMyHistory = clearMyHistory;
-        window.editResource = editResource;
         window.moveResource = moveResource;
         window.viewPassToday = viewPassToday;
         window.scrollToTarget = scrollToTarget;
@@ -2001,6 +2084,11 @@
         window.removeClosedDate = removeClosedDate;
         window.openHistoryModal = openHistoryModal;
         window.closeHistoryModal = closeHistoryModal;
+        
+        // New exports for edit functionality
+        window.openEditResourceModal = openEditResourceModal;
+        window.closeEditResourceModal = closeEditResourceModal;
+        window.saveEditResource = saveEditResource;
     </script>
 </body>
 </html>
