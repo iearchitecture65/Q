@@ -945,7 +945,7 @@
             const activeBookings = window.state.bookings.filter(b => 
                 b.resourceId === res.id && 
                 b.studentId === res.currentStudent && 
-                b.date === todayStr &&
+                b.date === todayStr && 
                 b.status === 'checked_in'
             );
             
@@ -1091,7 +1091,8 @@
                 
                 const isClosed = window.state.settings.closedDates && window.state.settings.closedDates[dateStr];
                 
-                const bookingsOnDay = window.state.bookings.filter(b => b.date === dateStr && b.resourceId === targetResId && b.status !== 'completed');
+                // แก้ไข: ไม่กรอง completed ออก เพื่อให้นับว่าเต็ม
+                const bookingsOnDay = window.state.bookings.filter(b => b.date === dateStr && b.resourceId === targetResId);
                 const count = bookingsOnDay.length;
                 const isFull = count >= maxSlots;
                 const isSelected = window.state.selectedDate === dateStr;
@@ -1191,7 +1192,8 @@
                 current.setHours(current.getHours() + 1);
             }
             const res = window.state.resources.find(r => r.id === window.state.publicSelectedResourceId);
-            const resBookings = window.state.bookings.filter(b => b.date === dateStr && b.resourceId === res.id && b.status !== 'completed');
+            // แก้ไข: ไม่กรอง completed ออก เพื่อให้แสดงเป็น locked slot
+            const resBookings = window.state.bookings.filter(b => b.date === dateStr && b.resourceId === res.id);
             
             const activeUserCard = renderActiveUserCard(window.state.publicSelectedResourceId);
 
@@ -1323,7 +1325,8 @@
                         ` : !isServiceAvailable(window.state.selectedDate) ? `<div class="p-12 bg-orange-50 rounded-[2.5rem] text-center border-2 border-dashed border-orange-200 font-bold text-orange-700 text-sm uppercase">ไม่เปิดให้บริการในวันนี้</div>` : `
                             <div id="slots-container" class="grid grid-cols-1 gap-2.5">
                                 ${slots.map(s => {
-                                    const bOthers = window.state.bookings.find(b => b.date === window.state.selectedDate && b.slot === s.start && b.resourceId === window.state.selectedResource.id && b.studentId !== window.state.studentId && b.status !== 'completed');
+                                    // แก้ไข: เอา completed ออกจากตัวกรอง เพื่อให้นับว่าคนอื่นจองไปแล้ว (แม้จะใช้เสร็จแล้วก็ตาม)
+                                    const bOthers = window.state.bookings.find(b => b.date === window.state.selectedDate && b.slot === s.start && b.resourceId === window.state.selectedResource.id && b.studentId !== window.state.studentId);
                                     const bMine = window.state.bookings.find(b => b.date === window.state.selectedDate && b.slot === s.start && b.resourceId === window.state.selectedResource.id && b.studentId === window.state.studentId);
                                     const isSelecting = window.state.selectedSlots.some(sel => sel.start === s.start);
                                     
@@ -1333,10 +1336,17 @@
                                     let icon = '<i data-lucide="plus" size="16" class="opacity-20"></i>';
                                     
                                     if (bOthers) { 
-                                        btnClass = "bg-red-50 border-red-200 text-red-500 shadow-sm opacity-90 cursor-not-allowed"; 
-                                        sText = `ไม่ว่าง (โดย: ${bOthers.studentId})`; 
-                                        act = ""; 
-                                        icon = '<i data-lucide="lock" size="14"></i>';
+                                        if (bOthers.status === 'completed') {
+                                            btnClass = "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"; 
+                                            sText = `ใช้งานเสร็จสิ้นแล้ว (${bOthers.studentId})`; 
+                                            act = ""; 
+                                            icon = '<i data-lucide="check-circle" size="14"></i>';
+                                        } else {
+                                            btnClass = "bg-red-50 border-red-200 text-red-500 shadow-sm opacity-90 cursor-not-allowed"; 
+                                            sText = `ไม่ว่าง (โดย: ${bOthers.studentId})`; 
+                                            act = ""; 
+                                            icon = '<i data-lucide="lock" size="14"></i>';
+                                        }
                                     } else if (bMine) { 
                                         if (bMine.status === 'completed') {
                                             btnClass = "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed";
