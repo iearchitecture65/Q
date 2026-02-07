@@ -369,9 +369,11 @@
             window.state.lastScrollTop = 0;
             window.state.shouldRestoreScroll = false;
             
-            // Stop scanner if active
+            // Stop scanner if active (FIX: Added try-catch and null check for safety)
             if (window.html5QrScanner) {
-                window.html5QrScanner.stop().catch(() => {});
+                try {
+                    window.html5QrScanner.stop().catch(() => {});
+                } catch(e) {}
                 window.html5QrScanner = null;
             }
             window.state.isScanning = false;
@@ -565,6 +567,8 @@
                 
                 if (text === targetId) {
                     window.html5QrScanner.stop().then(() => { 
+                        // FIX: Explicitly nullify scanner to clear state for goHome button
+                        window.html5QrScanner = null;
                         window.state.isScanning = false;
                         if (mode === 'checkout') {
                              processCheckOut(targetId);
@@ -574,6 +578,7 @@
                     });
                 } else { 
                     window.html5QrScanner.stop().then(() => {
+                        window.html5QrScanner = null; // FIX: Ensure clean state on error too
                         window.state.isScanning = false;
                         window.state.isProcessingScan = false;
                         window.uiAlert("คิวอาร์ไม่ถูกต้อง", "error");
@@ -1074,10 +1079,10 @@
             if (container) {
                 if (window.state.shouldRestoreScroll) {
                     container.style.scrollBehavior = 'auto'; 
-                    // FIXED: Use setTimeout to ensure layout is ready before restoring scroll
+                    // FIXED: Increased timeout to 50ms to ensure layout is ready before restoring scroll (Fixes Admin QR jump)
                     setTimeout(() => {
                         container.scrollTop = window.state.lastScrollTop;
-                    }, 0);
+                    }, 50);
                     window.state.shouldRestoreScroll = false; 
                 } else if (window.state.lastScrollTop === 0) {
                      container.scrollTop = 0;
@@ -1595,7 +1600,7 @@
                                     <div class="text-left overflow-hidden">
                                         <h3 class="font-bold text-base text-slate-800 leading-normal truncate pt-1">${res.name}</h3>
                                         <!-- Added Description Here -->
-                                        ${res.description ? `<p class="text-[10px] text-slate-500 mt-0 truncate font-medium">${res.description}</p>` : ''}
+                                        ${res.description ? `<p class="text-[10px] text-slate-500 mt-1 truncate font-medium">${res.description}</p>` : ''}
                                         <div class="flex items-center gap-2 mt-2 leading-none">
                                             <div class="w-2 h-2 rounded-full ${res.status === 'in_use' ? 'bg-orange-400 animate-pulse' : 'bg-green-400'}"></div>
                                             <span class="text-[9px] font-bold uppercase tracking-widest ${res.status === 'in_use' ? 'text-orange-500' : 'text-green-500'}">
