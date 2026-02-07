@@ -1079,10 +1079,8 @@
             if (container) {
                 if (window.state.shouldRestoreScroll) {
                     container.style.scrollBehavior = 'auto'; 
-                    // FIXED: Increased timeout to 50ms to ensure layout is ready before restoring scroll (Fixes Admin QR jump)
-                    setTimeout(() => {
-                        container.scrollTop = window.state.lastScrollTop;
-                    }, 50);
+                    // FIXED: Removed setTimeout to prevent flickering (immediate restore)
+                    container.scrollTop = window.state.lastScrollTop;
                     window.state.shouldRestoreScroll = false; 
                 } else if (window.state.lastScrollTop === 0) {
                      container.scrollTop = 0;
@@ -2114,7 +2112,8 @@
         window.clearByDay = clearByDay;
         window.clearAllHistory = clearAllHistory;
         window.openQRModal = openQRModal;
-        window.closeQRModal = closeQRModal;
+        // FIXED: Added restore scroll flag to prevent jumping to top
+        window.closeQRModal = () => { window.state.shouldRestoreScroll = true; window.state.showQRModal = null; window.render(); };
         window.closeModal = closeModal;
         window.requestCameraPermission = requestCameraPermission;
         window.render = render;
@@ -2129,7 +2128,8 @@
         window.addClosedDate = addClosedDate;
         window.removeClosedDate = removeClosedDate;
         window.openHistoryModal = openHistoryModal;
-        window.closeHistoryModal = closeHistoryModal;
+        // FIXED: Added restore scroll flag
+        window.closeHistoryModal = () => { window.state.shouldRestoreScroll = true; window.state.showHistoryModal = false; window.render(); };
         
         // New exports for edit functionality
         window.openEditResourceModal = openEditResourceModal;
