@@ -1391,7 +1391,8 @@
                                     if (bOthers) { 
                                         if (bOthers.status === 'completed') {
                                             btnClass = "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"; 
-                                            sText = `ใช้งานเสร็จสิ้นแล้ว (${bOthers.studentId})`; 
+                                            // FIXED: Show ID in completed status
+                                            sText = `ใช้งานเสร็จสิ้น (${bOthers.studentId})`; 
                                             act = ""; 
                                             icon = '<i data-lucide="check-circle" size="14"></i>';
                                         } else {
@@ -1403,7 +1404,8 @@
                                     } else if (bMine) { 
                                         if (bMine.status === 'completed') {
                                             btnClass = "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed";
-                                            sText = "ใช้งานเสร็จสิ้น";
+                                            // FIXED: Show ID in completed status for self too
+                                            sText = `ใช้งานเสร็จสิ้น (${bMine.studentId})`;
                                             act = "";
                                             icon = '<i data-lucide="check-circle" size="16"></i>';
                                         } else if (bMine.status === 'checked_in') {
