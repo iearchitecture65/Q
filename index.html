@@ -120,7 +120,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAYWIoMwtHmhhcEGloHX2pjX_wmv9Wj-O0",
@@ -504,9 +504,56 @@
             render();
 
             try {
-                const confirmedItems = [];
-                for (const slotObj of window.state.selectedSlots) {
-                    const data = {
+                // ใช้ Transaction เพื่อป้องกัน Race Condition (จองพร้อมกัน)
+                await runTransaction(db, async (transaction) => {
+                    const bookingsToCreate = [];
+                    
+                    for (const slotObj of window.state.selectedSlots) {
+                        // สร้าง ID แบบระบุเจาะจง (Resource + Date + Time) เพื่อให้มีได้แค่ไฟล์เดียว
+                        const safeSlot = slotObj.start.replace(':', '-');
+                        const docId = `${window.state.selectedResource.id}_${window.state.selectedDate}_${safeSlot}`;
+                        const docRef = doc(db, 'artifacts', fbId, 'public', 'data', 'bookings', docId);
+                        
+                        // อ่านข้อมูลก่อน (Atomicity Check)
+                        const sfDoc = await transaction.get(docRef);
+                        if (sfDoc.exists()) {
+                            throw `ช่วงเวลา ${slotObj.start} ถูกจองไปแล้วโดยผู้อื่น`;
+                        }
+                        
+                        // เช็คแบบ Legacy (เผื่อมีข้อมูลเก่าที่ ID เป็นแบบสุ่ม)
+                        const legacyConflict = window.state.bookings.find(b => 
+                            b.resourceId === window.state.selectedResource.id &&
+                            b.date === window.state.selectedDate &&
+                            b.slot === slotObj.start
+                        );
+                        if (legacyConflict) {
+                             throw `ช่วงเวลา ${slotObj.start} ไม่ว่าง (ข้อมูลไม่อัปเดต)`;
+                        }
+
+                        bookingsToCreate.push({ ref: docRef, slot: slotObj });
+                    }
+
+                    // ถ้าผ่านทุกเงื่อนไข ทำการบันทึก
+                    for (const item of bookingsToCreate) {
+                        const data = {
+                            resourceId: window.state.selectedResource.id,
+                            resourceName: window.state.selectedResource.name,
+                            date: window.state.selectedDate,
+                            slot: item.slot.start,
+                            slot_end: item.slot.end,
+                            studentId: window.state.studentId,
+                            status: 'booked',
+                            createdAt: serverTimestamp()
+                        };
+                        transaction.set(item.ref, data);
+                    }
+                });
+
+                // สร้างข้อมูลจำลองเพื่อแสดงผลทันที (ไม่ต้องรอ Snapshot)
+                const confirmedItems = window.state.selectedSlots.map(slotObj => {
+                    const safeSlot = slotObj.start.replace(':', '-');
+                    return {
+                        id: `${window.state.selectedResource.id}_${window.state.selectedDate}_${safeSlot}`,
                         resourceId: window.state.selectedResource.id,
                         resourceName: window.state.selectedResource.name,
                         date: window.state.selectedDate,
@@ -514,18 +561,27 @@
                         slot_end: slotObj.end,
                         studentId: window.state.studentId,
                         status: 'booked',
-                        createdAt: serverTimestamp()
+                        createdAt: new Date(),
+                        checkInAt: null,
+                        checkOutAt: null
                     };
-                    const docRef = await addDoc(collection(db, 'artifacts', fbId, 'public', 'data', 'bookings'), data);
-                    confirmedItems.push({ id: docRef.id, ...data });
-                }
+                });
+
                 window.state.selectedSlots = [];
                 window.state.activeBookings = confirmedItems;
                 window.state.view = 'pass'; 
                 window.state.lastScrollTop = 0; 
                 window.state.shouldRestoreScroll = false;
             } catch (err) { 
-                window.uiAlert("Booking failed: " + err.message, "error"); 
+                // แสดงข้อความแจ้งเตือนเมื่อชนกัน
+                let msg = err.message || err.toString();
+                if (msg.includes("ถูกจอง")) {
+                    window.uiAlert("เสียใจด้วย! " + msg, "error");
+                } else {
+                    window.uiAlert("Booking failed: " + msg, "error");
+                }
+                // ล้างการเลือกเพื่อให้ผู้ใช้เลือกใหม่
+                window.state.selectedSlots = [];
             } finally {
                 window.state.isLoading = false;
                 render();
