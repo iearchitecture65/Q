@@ -359,6 +359,26 @@
             }
             render(); 
         };
+        
+        // --- NEW: Go Home Function to ensure clean state reset ---
+        const goHome = () => {
+            window.state.activeBookings = [];
+            window.state.selectedSlots = [];
+            window.state.selectedResource = null;
+            window.state.view = 'selection';
+            window.state.lastScrollTop = 0;
+            window.state.shouldRestoreScroll = false;
+            
+            // Stop scanner if active
+            if (window.html5QrScanner) {
+                window.html5QrScanner.stop().catch(() => {});
+                window.html5QrScanner = null;
+            }
+            window.state.isScanning = false;
+            window.state.isProcessingScan = false;
+            
+            render();
+        };
 
         const handleLogin = (e) => {
             e.preventDefault();
@@ -1054,7 +1074,10 @@
             if (container) {
                 if (window.state.shouldRestoreScroll) {
                     container.style.scrollBehavior = 'auto'; 
-                    container.scrollTop = window.state.lastScrollTop;
+                    // FIXED: Use setTimeout to ensure layout is ready before restoring scroll
+                    setTimeout(() => {
+                        container.scrollTop = window.state.lastScrollTop;
+                    }, 0);
                     window.state.shouldRestoreScroll = false; 
                 } else if (window.state.lastScrollTop === 0) {
                      container.scrollTop = 0;
@@ -1733,8 +1756,8 @@
                                         <i data-lucide="calendar-off" size="18"></i> เช็คอินได้เฉพาะวันที่จอง
                                     </button>
                                 `}
-                                <!-- FIXED: Clear activeBookings and selectedSlots to prevent stale state -->
-                                <button onclick="window.state.activeBookings=[]; window.state.selectedSlots=[]; window.setView('selection'); window.state.selectedResource=null; window.render();" class="text-[9px] font-bold text-slate-400 uppercase tracking-widest py-2 hover:text-indigo-500 transition-colors">กลับหน้าหลัก</button>
+                                <!-- FIXED: Use goHome() helper to ensure clean state reset especially after scanning -->
+                                <button onclick="window.goHome()" class="text-[9px] font-bold text-slate-400 uppercase tracking-widest py-2 hover:text-indigo-500 transition-colors">กลับหน้าหลัก</button>
                             </div>
                         </div>
                     </div>
@@ -2107,6 +2130,9 @@
         window.openEditResourceModal = openEditResourceModal;
         window.closeEditResourceModal = closeEditResourceModal;
         window.saveEditResource = saveEditResource;
+        
+        // EXPORT NEW FUNCTION
+        window.goHome = goHome;
     </script>
 </body>
 </html>
