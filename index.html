@@ -1080,7 +1080,7 @@
             const text = isCalendar ? 'เลื่อนลงเพื่อดูช่วงเวลา' : 'เลื่อนเพื่อดูจุดใช้งาน';
 
             return `
-                <div id="scroll-hint" onclick="window.scrollToTarget()" class="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 bg-slate-800/70 text-white text-[10px] font-bold px-6 py-3 rounded-full shadow-2xl opacity-0 transition-all duration-300 pointer-events-none z-30 flex items-center gap-2 border border-white/10 uppercase tracking-wider cursor-pointer hover:bg-slate-700 active:scale-95">
+                <div id="scroll-hint" onclick="window.scrollToTarget()" class="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 bg-slate-800/80 text-white text-[10px] font-bold px-6 py-3 rounded-full shadow-2xl opacity-0 transition-all duration-300 pointer-events-none z-30 flex items-center gap-2 border border-white/10 uppercase tracking-wider cursor-pointer hover:bg-slate-700 active:scale-95">
                     <span>${text}</span>
                     <i data-lucide="arrow-down" size="14" class="animate-bounce-slow"></i>
                 </div>
