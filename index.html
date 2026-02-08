@@ -1163,7 +1163,8 @@
                 mainContent = `
                     ${renderHeader()}
                     <div class="scrollable-content custom-scrollbar">
-                        <main class="max-w-xl mx-auto px-4 py-6">
+                        <!-- ปรับแก้: ขยายความกว้าง Main Container จาก max-w-xl เป็น max-w-2xl -->
+                        <main class="max-w-2xl mx-auto px-4 py-6">
                             ${window.state.isAdmin ? renderAdminUI() : renderUserUI()}
                         </main>
                         ${renderScrollHint()}
@@ -2177,12 +2178,13 @@
             
             return `
                 <div class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-8 page-transition">
-                    <div class="bg-white rounded-[2.5rem] p-10 max-w-sm w-full text-center shadow-2xl border border-white relative animate-in zoom-in duration-200">
+                    <!-- ปรับแก้: ขยายความกว้าง Modal จาก max-w-sm เป็น max-w-lg -->
+                    <div class="bg-white rounded-[2.5rem] p-10 max-w-lg w-full text-center shadow-2xl border border-white relative animate-in zoom-in duration-200">
                         <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-indigo-100">
                             <i data-lucide="info" size="32"></i>
                         </div>
                         <h3 class="text-xl font-black text-slate-800 mb-2 leading-tight">ประกาศ / วิธีใช้งาน</h3>
-                        <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-6 text-left max-h-[40vh] overflow-y-auto custom-scrollbar">
+                        <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-6 text-left max-h-[50vh] overflow-y-auto custom-scrollbar">
                             <p class="text-sm text-slate-600 font-medium leading-relaxed whitespace-pre-line">${text}</p>
                         </div>
                         <button onclick="window.state.showAnnouncementModal = false; window.render()" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg border-b-4 border-indigo-900 active:scale-95 transition-all">รับทราบ</button>
@@ -2197,7 +2199,8 @@
             
             return `
                 <div class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-8 page-transition">
-                    <div class="bg-white rounded-[2.5rem] p-8 max-w-sm w-full text-center shadow-2xl border border-white relative animate-in zoom-in duration-200">
+                    <!-- ปรับแก้: ขยายความกว้าง Modal เล็กน้อยเป็น max-w-md -->
+                    <div class="bg-white rounded-[2.5rem] p-8 max-w-md w-full text-center shadow-2xl border border-white relative animate-in zoom-in duration-200">
                         <button onclick="window.state.showResourceSelectModal = false; window.render()" class="absolute -top-3 -right-3 w-10 h-10 bg-white text-slate-800 rounded-full shadow-lg flex items-center justify-center border border-slate-100 active:scale-90 transition-transform"><i data-lucide="x" size="20"></i></button>
                         
                         <div class="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
@@ -2236,7 +2239,8 @@
 
             return `
                 <div class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-8 page-transition">
-                    <div class="bg-white rounded-[2.5rem] p-8 max-w-sm w-full text-center shadow-2xl border border-white relative">
+                    <!-- ปรับแก้: ขยายความกว้าง Modal เล็กน้อยเป็น max-w-md -->
+                    <div class="bg-white rounded-[2.5rem] p-8 max-w-md w-full text-center shadow-2xl border border-white relative">
                         <button onclick="window.closeHistoryModal()" class="absolute -top-3 -right-3 w-10 h-10 bg-white text-slate-800 rounded-full shadow-lg flex items-center justify-center border border-slate-100 active:scale-90 transition-transform"><i data-lucide="x" size="20"></i></button>
                         
                         <div class="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
