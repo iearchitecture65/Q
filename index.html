@@ -138,77 +138,42 @@
         const db = getFirestore(app);
         const fbId = "smart-booking-v4"; 
 
-        // --- NEW: Student Database Mapping ---
+        // --- NEW: Student Database Mapping (Fallback) ---
+        // This is kept for backup, but the system will prefer the Whitelist data if available
         const STUDENT_DATABASE = {
-            "63030127": "นางสาวทัศน์ชากร ศรีสุวรรณ์",
-            "64030020": "นางสาวขวัญชนก เป็งสุนา",
-            "64030042": "นายฐานิต นพเทา",
-            "64030052": "นางสาวณัฐณิชา ทองดี",
-            "64030078": "นางสาวธันยธรณ์ เศรษฐีธร",
-            "64030082": "นางสาวนฏกร ชัยชัชนันท์",
-            "64030089": "นางสาวนัสรีน วงษ์สมาน",
-            "64030118": "นางสาวปิ่นมุกข์ ศรีคง",
-            "64030135": "นางสาวพิรญาณ์ แซ่อึ้ง",
-            "64030159": "นางสาวยุพเรศ คำนาแซง",
-            "64030163": "นางสาวรวิวรรณ มีเพียร",
-            "64030171": "นางสาววชิรญาณ์ อารีเอื้อ",
-            "64030179": "นางสาววริษฐา อานันท์วัชรานนท์",
-            "64030239": "นายเจษฎาภรณ์ สิรุจฐนน",
-            "64030287": "นางสาวพรนภา ปั่น",
-            "64030325": "นางสาวอริสา พืมขุนทด",
-            "65030001": "นางสาวกชกร ทรัพย์โคกสูง",
-            "65030004": "นางสาวกนกวรรณ จันทร์มาเมือง",
-            "65030008": "นางสาวกมลเนตร ชัยชนะ",
-            "65030009": "นางสาวกมลฤทัย สว่างแจ้ง",
-            "65030022": "นางสาวกุลภัสสร์ ธีระเพ็ญแสง",
-            "65030030": "นางสาวจันทรัตน์ อ่อนละมูล",
-            "65030036": "นายเฉลิมพร วันเพ็ญ",
-            "65030038": "นางสาวชญาสินี วงศ์รักษา",
-            "65030040": "นางสาวชนาภา ท้วมเกร็ด",
-            "65030043": "นายชยาวุธ ภวคุณกร",
-            "65030045": "นางสาวชยุตรา เสนากูล",
-            "65030048": "นางสาวชวพร ประสงค์ผล",
-            "65030054": "นางสาวโชติกา อายุวรรณกร",
-            "65030057": "นายฐิติกานต์ ปุระเตนนท์",
-            "65030063": "นางสาวณัชชา อภิเดช",
-            "65030070": "นายณัฐนันท์ เตชัย",
-            "65030093": "นายธนภัทร ไชยเมือง",
-            "65030095": "นายธนภัทร พ้องเสียง",
-            "65030115": "นายนนทวัฒน์ ชีพอุบัติ",
-            "65030123": "นางสาวนันกานต์ ชูจันทร์",
-            "65030138": "นายปฏิภาณ บำเรอจิต",
-            "65030140": "นางสาวปณิตา พงษ์เรือง",
-            "65030145": "นางสาวปรียากร สายสิม",
-            "65030173": "นางสาวพุธิตา ปันฟอง",
-            "65030193": "นายภูวิศ ชินทองเปลว",
-            "65030215": "นางสาววนิชยา ทองสุข",
-            "65030216": "นางสาววนิดา วามะขัน",
-            "65030221": "นางสาววรัญญา ประสิทธิ์พิชิต",
-            "65030225": "นางสาววริษา วิบูลพันธ์",
-            "65030231": "นายวุฒิชัย อุ่นวิเศษ",
-            "65030234": "นางสาวศศิกานต์ เจริญพันธุ์",
-            "65030249": "นายศุภาวุฒิ ไขดอน",
-            "65030272": "นางสาวอชิรญา ทิพกันทา",
-            "65030273": "นางสาวอติกานต์ เกษแก้ว",
-            "65030280": "นายอัฟนาน สาเม๊าะ",
-            "65030282": "นางสาวอรกัญญา ปัญญา",
-            "65030286": "นางสาวอริสา ประทีป ณ ถลาง",
-            "65030288": "นางสาวอังคณา ใบตะเห",
-            "65030292": "นางสาวอาทิตยา พริกเอียด",
-            "65030295": "นางสาวอารียา สุขเหลือง",
             "65030298": "นายนราวิชญ์ สมันตกล"
         };
 
-        // Helper function to get display name (ID + First Name)
+        // --- UPDATED: Get Display Name Logic ---
         function getDisplayName(id) {
             if (!id) return "-";
             if (id === "ADMIN") return "Admin";
-            const fullName = STUDENT_DATABASE[id];
+            
+            // 1. Try to find in dynamic whitelist (allowedStudents) FIRST
+            // Searches for any line starting with the ID
+            let fullName = null;
+            if (window.state && window.state.allowedStudents) {
+                const foundEntry = window.state.allowedStudents.find(entry => entry.startsWith(id));
+                if (foundEntry) {
+                    // Extract Name: Find first whitespace and take everything after
+                    const firstSpaceIndex = foundEntry.search(/[\s\t]/);
+                    if (firstSpaceIndex !== -1) {
+                        fullName = foundEntry.substring(firstSpaceIndex).trim();
+                    }
+                }
+            }
+
+            // 2. Fallback to static database if not found in whitelist
+            if (!fullName) {
+                fullName = STUDENT_DATABASE[id];
+            }
+
             if (fullName) {
                 // Remove titles (นาย, นางสาว, etc.) and take only the first name
-                const cleanName = fullName.replace(/^(นาย|นางสาว|นาง|ด\.ช\.|ด\.ญ\.)/, '').trim().split(/\s+/)[0];
+                const cleanName = fullName.replace(/^(นาย|นางสาว|นาง|ด\.ช\.|ด\.ญ\.|Mr\.|Ms\.|Mrs\.)/i, '').trim().split(/\s+/)[0];
                 return `${id} ${cleanName}`;
             }
+            // If no name found, return just ID
             return id;
         }
 
@@ -470,6 +435,7 @@
             render();
         };
 
+        // --- UPDATED: Login Logic ---
         const handleLogin = (e) => {
             e.preventDefault();
             const input = document.getElementById('login_sid').value.trim();
@@ -479,9 +445,20 @@
                 window.state.studentId = "ADMIN";
                 localStorage.setItem('is_admin', 'true');
             } else if (input.length >= 5) {
-                if (window.state.allowedStudents.length > 0 && !window.state.allowedStudents.includes(input)) {
-                    return window.uiAlert("รหัสนักศึกษานี้ไม่ได้รับอนุญาตให้ใช้งานระบบ", "error");
+                // Check whitelist if it exists
+                if (window.state.allowedStudents.length > 0) {
+                    // Check if any entry starts with the input ID
+                    // We split by whitespace to get the first token (ID) of the stored line
+                    const isAllowed = window.state.allowedStudents.some(entry => {
+                        const storedId = entry.split(/[\s\t]+/)[0];
+                        return storedId === input;
+                    });
+                    
+                    if (!isAllowed) {
+                        return window.uiAlert("รหัสนักศึกษานี้ไม่ได้รับอนุญาตให้ใช้งานระบบ", "error");
+                    }
                 }
+                
                 window.state.isAdmin = false;
                 window.state.isLoggedIn = true;
                 window.state.studentId = input;
@@ -882,14 +859,19 @@
             });
         };
 
+        // --- UPDATED: Save Whitelist Logic ---
         const saveWhitelist = async (e) => {
             e.preventDefault();
             window.saveScrollPosition();
 
             const raw = e.target.studentsList.value;
-            const list = raw.split(/[\n\t\r\s,]+/).map(s => s.trim()).filter(s => s.length >= 5);
-            await setDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'settings', 'allowed_students'), { list: [...new Set(list)], updatedAt: serverTimestamp() });
-            window.uiAlert(`บันทึก ${list.length} รายชื่อสำเร็จ`);
+            // Split by newline characters to separate entries, preserving names
+            const list = raw.split(/\r?\n/)
+                .map(s => s.trim())
+                .filter(s => s.length > 0); // Filter out empty lines only
+            
+            await setDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'settings', 'allowed_students'), { list: list, updatedAt: serverTimestamp() });
+            window.uiAlert(`บันทึก ${list.length} รายชื่อเรียบร้อย`);
         };
 
         const addRes = async (e) => {
@@ -1634,7 +1616,7 @@
                                             btnClass = "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed";
                                             // FIXED: Show ID in completed status for self too
                                             sText = `ใช้งานเสร็จสิ้น (${getDisplayName(bMine.studentId)})`;
-                                            act = "";
+                                            act = ""; 
                                             icon = '<i data-lucide="check-circle" size="16"></i>';
                                         } else if (bMine.status === 'checked_in') {
                                             btnClass = "bg-indigo-50 border-indigo-500 text-indigo-700 shadow-sm cursor-not-allowed"; 
@@ -2058,7 +2040,7 @@
                                 <i data-lucide="${window.state.whitelistLocked ? 'lock' : 'unlock'}" size="18"></i>
                             </button>
                         </div>
-                        <p class="text-indigo-300 text-[10px] font-bold uppercase tracking-widest opacity-70">วางรายชื่อที่ Copy จาก Excel ได้เลย</p>
+                        <p class="text-indigo-300 text-[10px] font-bold uppercase tracking-widest opacity-70">วางรายชื่อที่ Copy จาก Excel ได้เลย (ระบบจะดึงเฉพาะรหัสนักศึกษาโดยอัตโนมัติ)</p>
                         <form onsubmit="window.saveWhitelist(event)" class="space-y-4">
                             <textarea name="studentsList" ${window.state.whitelistLocked ? 'readonly' : ''} placeholder="วางรหัสนักศึกษาที่นี่..." 
                                     class="w-full h-40 p-5 rounded-2xl bg-white/5 border-2 border-white/10 text-white font-mono text-xs outline-none focus:border-indigo-500 transition-all custom-scrollbar 
