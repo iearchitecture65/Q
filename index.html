@@ -2177,17 +2177,18 @@
             const text = window.state.settings.announcement || "ยินดีต้อนรับสู่ระบบจองใช้งานทรัพยากร\nกรุณาปฏิบัติตามกฎระเบียบอย่างเคร่งครัด";
             
             return `
-                <div class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-8 page-transition">
-                    <!-- ปรับแก้: ขยายความกว้าง Modal จาก max-w-sm เป็น max-w-lg -->
-                    <div class="bg-white rounded-[2.5rem] p-10 max-w-lg w-full text-center shadow-2xl border border-white relative animate-in zoom-in duration-200">
-                        <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-indigo-100">
+                <div class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 page-transition"> <!-- Reduced outer padding from p-8 to p-4 -->
+                    <!-- Reduced inner padding from p-10 to p-6 -->
+                    <div class="bg-white rounded-[2.5rem] p-6 max-w-lg w-full text-center shadow-2xl border border-white relative animate-in zoom-in duration-200">
+                        <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-indigo-100"> <!-- Reduced margin bottom mb-6 to mb-4 -->
                             <i data-lucide="info" size="32"></i>
                         </div>
                         <h3 class="text-xl font-black text-slate-800 mb-2 leading-tight">ประกาศ / วิธีใช้งาน</h3>
-                        <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-6 text-left max-h-[50vh] overflow-y-auto custom-scrollbar">
-                            <p class="text-sm text-slate-600 font-medium leading-relaxed whitespace-pre-line">${text}</p>
+                        <!-- Reduced inner content padding from p-6 to p-4 -->
+                        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-4 text-left max-h-[50vh] overflow-y-auto custom-scrollbar">
+                            <p class="text-sm text-slate-600 font-medium leading-relaxed whitespace-pre-line break-words">${text}</p>
                         </div>
-                        <button onclick="window.state.showAnnouncementModal = false; window.render()" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg border-b-4 border-indigo-900 active:scale-95 transition-all">รับทราบ</button>
+                        <button onclick="window.state.showAnnouncementModal = false; window.render()" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg border-b-4 border-indigo-900 active:scale-95 transition-all">รับทราบ</button>
                     </div>
                 </div>
             `;
