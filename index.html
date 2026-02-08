@@ -160,7 +160,8 @@
                 startDate: getLocalDateString(), 
                 endDate: "",
                 systemStatus: true, // Default open
-                closedDates: {} // Format: { "YYYY-MM-DD": "Reason" }
+                closedDates: {}, // Format: { "YYYY-MM-DD": "Reason" }
+                announcement: "" // NEW: Announcement Text
             },
             allowedStudents: [], 
             resources: [],
@@ -174,8 +175,15 @@
             activeBookings: [],
             modal: { show: false, title: '', message: '', type: 'info', onConfirm: null },
             showQRModal: null,
-            showHistoryModal: false, // New State for History Popup
-            editingResource: null, // New State for Edit Resource Modal
+            showHistoryModal: false, 
+            editingResource: null,
+            
+            // NEW STATES
+            showAnnouncementModal: false,
+            showResourceSelectModal: false,
+            resourceSelectOptions: [],
+            resourceSelectDate: '',
+
             isScanning: false,
             isProcessingScan: false,
             whitelistLocked: true, 
@@ -217,7 +225,6 @@
             return d.toLocaleString('th-TH', { hour12: false });
         }
         
-        // NEW: Specific time formatter
         function formatTimeOnly(ts) {
             if (!ts) return "-";
             const d = ts.toDate ? ts.toDate() : new Date(ts); 
@@ -317,7 +324,16 @@
 
         function listenToData() {
             onSnapshot(doc(db, 'artifacts', fbId, 'public', 'data', 'settings', 'global_config'), (s) => {
-                if (s.exists()) window.state.settings = { ...window.state.settings, ...s.data() };
+                if (s.exists()) {
+                    const data = s.data();
+                    window.state.settings = { ...window.state.settings, ...data };
+                    
+                    // Trigger Announcement Modal on First Load if content exists
+                    if (data.announcement && !sessionStorage.getItem('seenAnnouncement')) {
+                        window.state.showAnnouncementModal = true;
+                        sessionStorage.setItem('seenAnnouncement', 'true');
+                    }
+                }
                 window.saveScrollPosition(); 
                 render();
             });
@@ -360,7 +376,6 @@
             render(); 
         };
         
-        // --- NEW: Go Home Function to ensure clean state reset ---
         const goHome = () => {
             window.state.activeBookings = [];
             window.state.selectedSlots = [];
@@ -369,7 +384,6 @@
             window.state.lastScrollTop = 0;
             window.state.shouldRestoreScroll = false;
             
-            // Stop scanner if active (FIX: Added try-catch and null check for safety)
             if (window.html5QrScanner) {
                 try {
                     window.html5QrScanner.stop().catch(() => {});
@@ -407,6 +421,7 @@
         const logout = () => { 
             window.uiConfirm("ออกจากระบบ", "คุณต้องการออกจากระบบใช่หรือไม่?", () => {
                 localStorage.clear();
+                sessionStorage.clear(); // Clear session to show announcement again on relogin
                 window.state.isLoggedIn = false; 
                 window.state.isAdmin = false;
                 window.state.view = 'login';
@@ -414,7 +429,6 @@
             });
         };
 
-        // Modified: selectResource now takes only ID and looks up full object to ensure description is present
         const selectResource = (id) => { 
             const res = window.state.resources.find(r => r.id === id);
             if (!res) return;
@@ -426,17 +440,39 @@
             render(); 
         };
 
+        // --- UPDATED: Fix for Multiple Resources on Same Date ---
         const goToDate = (dateStr) => {
              window.closeHistoryModal();
-             const booking = window.state.bookings.find(b => b.date === dateStr && b.studentId === window.state.studentId);
              
-             if (booking) {
-                 // Try to find current resource info to get description
+             // 1. Get all bookings for this user on this date
+             const myBookingsOnDate = window.state.bookings.filter(b => 
+                 b.studentId === window.state.studentId && 
+                 b.date === dateStr
+             );
+
+             if (myBookingsOnDate.length === 0) return;
+
+             // 2. Extract unique resource IDs involved
+             const uniqueResourceIds = [...new Set(myBookingsOnDate.map(b => b.resourceId))];
+
+             // 3. Logic: If more than 1 resource, show selection modal
+             if (uniqueResourceIds.length > 1) {
+                 window.state.resourceSelectDate = dateStr;
+                 window.state.resourceSelectOptions = uniqueResourceIds.map(rid => {
+                     const r = window.state.resources.find(res => res.id === rid);
+                     // If resource deleted, provide fallback name
+                     const bookingRef = myBookingsOnDate.find(b => b.resourceId === rid);
+                     return r ? r : { id: rid, name: bookingRef?.resourceName || 'Unknown Resource', description: '' };
+                 });
+                 window.state.showResourceSelectModal = true;
+                 render();
+             } else {
+                 // Single resource case (Old Logic)
+                 const booking = myBookingsOnDate[0];
                  const currentRes = window.state.resources.find(r => r.id === booking.resourceId);
                  if (currentRes) {
                      window.state.selectedResource = { ...currentRes };
                  } else {
-                     // Fallback if resource was deleted
                      window.state.selectedResource = { id: booking.resourceId, name: booking.resourceName, description: '' };
                  }
                  
@@ -445,16 +481,28 @@
                  window.state.lastScrollTop = 0;
                  window.render();
                  setTimeout(() => { window.scrollToTarget(); }, 300);
-             } else {
-                 if (window.state.resources.length > 0) {
-                     const r = window.state.resources[0];
-                     window.state.selectedResource = { ...r };
-                     window.state.selectedDate = dateStr;
-                     window.state.view = 'calendar';
-                     window.render();
-                     setTimeout(() => window.scrollToTarget(), 300);
-                 }
              }
+        };
+
+        const selectResourceFromDate = (resId) => {
+            window.state.showResourceSelectModal = false;
+            // Find resource info
+            const currentRes = window.state.resources.find(r => r.id === resId);
+            const dateStr = window.state.resourceSelectDate;
+            
+            if (currentRes) {
+                window.state.selectedResource = { ...currentRes };
+            } else {
+                // Fallback name lookup
+                const booking = window.state.bookings.find(b => b.resourceId === resId && b.date === dateStr);
+                window.state.selectedResource = { id: resId, name: booking?.resourceName || 'Unknown', description: '' };
+            }
+            
+            window.state.selectedDate = dateStr;
+            window.state.view = 'calendar';
+            window.state.lastScrollTop = 0;
+            render();
+            setTimeout(() => { window.scrollToTarget(); }, 300);
         };
 
         const toggleSlotSelection = (slotObj) => {
@@ -721,6 +769,16 @@
             window.uiAlert("บันทึกเรียบร้อยแล้ว");
         };
 
+        // NEW: Save Announcement Text
+        const saveAnnouncement = async (e) => {
+            e.preventDefault();
+            const text = e.target.announcement.value;
+            await updateDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'settings', 'global_config'), {
+                announcement: text
+            });
+            window.uiAlert("บันทึกประกาศเรียบร้อยแล้ว");
+        };
+
         const toggleSystemStatus = async () => {
             const newStatus = !window.state.settings.systemStatus;
             await updateDoc(doc(db, 'artifacts', fbId, 'public', 'data', 'settings', 'global_config'), {
@@ -954,7 +1012,7 @@
         });
 
         const openHistoryModal = () => { window.state.showHistoryModal = true; render(); };
-        const closeHistoryModal = () => { window.state.showHistoryModal = false; render(); };
+        const closeHistoryModal = () => { window.state.shouldRestoreScroll = true; window.state.showHistoryModal = false; window.render(); };
 
         window.uiAlert = (message, type = 'info') => {
             window.saveScrollPosition();
@@ -973,7 +1031,7 @@
         };
         // FIXED: Added window.saveScrollPosition() to prevent jumping
         const openQRModal = (id, name) => { window.saveScrollPosition(); window.state.showQRModal = { id, name }; render(); };
-        const closeQRModal = () => { window.state.showQRModal = null; render(); };
+        const closeQRModal = () => { window.state.shouldRestoreScroll = true; window.state.showQRModal = null; window.render(); };
         
         const requestCameraPermission = (mode) => {
             const actionText = mode === 'checkout' ? "เช็คเอาท์ (คืนทรัพยากร)" : "เช็คอิน";
@@ -1128,6 +1186,8 @@
                 ${renderQRModalDisplay()}
                 ${renderHistoryModal()}
                 ${renderEditResourceModal()} 
+                ${renderAnnouncementModal()}
+                ${renderResourceSelectionModal()}
                 ${loadingOverlay}
             `;
 
@@ -1176,7 +1236,6 @@
                     <div class="max-w-sm w-full bg-white rounded-[2.5rem] p-10 shadow-2xl border border-white text-center page-transition">
                         <div class="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white mx-auto mb-8 shadow-xl"><i data-lucide="shield-check" size="40"></i></div>
                         <h1 class="text-3xl font-black text-slate-800 mb-2">SmartBooking</h1>
-                        <!-- แก้ไข: เปลี่ยน Identity & Access Management เป็นชื่อโปรเจกต์ -->
                         <p class="text-slate-400 text-[10px] font-bold uppercase mt-2 tracking-widest opacity-60">${window.state.settings.projectName}</p>
                         <form onsubmit="window.handleLogin(event)" class="mt-12 space-y-5">
                             <input id="login_sid" type="text" placeholder="รหัสนักศึกษา" class="w-full p-5 rounded-2xl bg-slate-50 border-2 border-slate-100 font-bold text-lg text-center outline-none focus:border-indigo-500 shadow-inner" required>
@@ -1559,7 +1618,11 @@
                                 <p class="text-[8px] font-bold text-indigo-600 uppercase tracking-widest mt-1">${window.state.settings.projectName}</p>
                             </div>
                         </div>
-                        <button onclick="window.logout()" class="p-3 bg-slate-50 text-slate-400 hover:text-red-500 rounded-xl border border-slate-100 active:scale-90 transition-all"><i data-lucide="power" size="18"></i></button>
+                        <div class="flex items-center gap-2">
+                             <!-- NEW: Info/Announcement Button -->
+                            <button onclick="window.state.showAnnouncementModal = true; window.render()" class="p-3 bg-indigo-50 text-indigo-500 hover:text-indigo-600 rounded-xl border border-indigo-100 active:scale-90 transition-all"><i data-lucide="info" size="18"></i></button>
+                            <button onclick="window.logout()" class="p-3 bg-slate-50 text-slate-400 hover:text-red-500 rounded-xl border border-slate-100 active:scale-90 transition-all"><i data-lucide="power" size="18"></i></button>
+                        </div>
                     </div>
                 </header>
             `;
@@ -1878,6 +1941,15 @@
                             </button>
                         </div>
                     </section>
+                    
+                    <!-- NEW: Announcement Settings -->
+                    <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-4 text-left">
+                         <h2 class="text-xl font-black text-slate-800 flex items-center gap-3 text-left leading-none"><i data-lucide="megaphone" class="text-indigo-600"></i> ประกาศ / วิธีใช้งาน</h2>
+                         <form onsubmit="window.saveAnnouncement(event)" class="space-y-3">
+                            <textarea name="announcement" placeholder="พิมพ์ประกาศ หรือ วิธีการใช้งานที่นี่..." class="w-full h-32 p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 font-medium text-sm outline-none focus:border-indigo-500 transition-all custom-scrollbar resize-none">${window.state.settings.announcement || ''}</textarea>
+                            <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all text-xs uppercase tracking-widest">บันทึกประกาศ</button>
+                         </form>
+                    </section>
 
                     <!-- SPECIAL DATES MANAGEMENT -->
                     <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6 text-left">
@@ -2097,6 +2169,58 @@
                 </div>
             `;
         }
+        
+        // --- NEW: Announcement Modal ---
+        function renderAnnouncementModal() {
+            if (!window.state.showAnnouncementModal) return "";
+            const text = window.state.settings.announcement || "ยินดีต้อนรับสู่ระบบจองใช้งานทรัพยากร\nกรุณาปฏิบัติตามกฎระเบียบอย่างเคร่งครัด";
+            
+            return `
+                <div class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-8 page-transition">
+                    <div class="bg-white rounded-[2.5rem] p-10 max-w-sm w-full text-center shadow-2xl border border-white relative animate-in zoom-in duration-200">
+                        <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-indigo-100">
+                            <i data-lucide="info" size="32"></i>
+                        </div>
+                        <h3 class="text-xl font-black text-slate-800 mb-2 leading-tight">ประกาศ / วิธีใช้งาน</h3>
+                        <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-6 text-left max-h-[40vh] overflow-y-auto custom-scrollbar">
+                            <p class="text-sm text-slate-600 font-medium leading-relaxed whitespace-pre-line">${text}</p>
+                        </div>
+                        <button onclick="window.state.showAnnouncementModal = false; window.render()" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg border-b-4 border-indigo-900 active:scale-95 transition-all">รับทราบ</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // --- NEW: Resource Selection Modal (For conflict dates) ---
+        function renderResourceSelectionModal() {
+            if (!window.state.showResourceSelectModal) return "";
+            
+            return `
+                <div class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-8 page-transition">
+                    <div class="bg-white rounded-[2.5rem] p-8 max-w-sm w-full text-center shadow-2xl border border-white relative animate-in zoom-in duration-200">
+                        <button onclick="window.state.showResourceSelectModal = false; window.render()" class="absolute -top-3 -right-3 w-10 h-10 bg-white text-slate-800 rounded-full shadow-lg flex items-center justify-center border border-slate-100 active:scale-90 transition-transform"><i data-lucide="x" size="20"></i></button>
+                        
+                        <div class="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                            <i data-lucide="layers" size="28"></i>
+                        </div>
+                        <h3 class="text-lg font-black text-slate-800 mb-1 leading-tight">เลือกจุดใช้งาน</h3>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-6">คุณมีการจองหลายจุดในวันที่ ${formatDateTH(window.state.resourceSelectDate)}</p>
+                        
+                        <div class="space-y-3 max-h-[40vh] overflow-y-auto custom-scrollbar pr-1">
+                            ${window.state.resourceSelectOptions.map(r => `
+                                <button onclick="window.selectResourceFromDate('${r.id}')" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700 transition-all active:scale-[0.98] group flex items-center gap-4 text-left">
+                                    <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 group-hover:text-indigo-500 shadow-sm border border-slate-100"><i data-lucide="box" size="20"></i></div>
+                                    <div>
+                                        <p class="font-bold text-sm text-slate-700 group-hover:text-indigo-800">${r.name}</p>
+                                        <p class="text-[9px] text-slate-400 uppercase font-bold tracking-wider">เลือกดูรายละเอียด</p>
+                                    </div>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
 
         function renderHistoryModal() {
             if (!window.state.showHistoryModal) return "";
@@ -2203,6 +2327,10 @@
         window.openEditResourceModal = openEditResourceModal;
         window.closeEditResourceModal = closeEditResourceModal;
         window.saveEditResource = saveEditResource;
+        
+        // New exports for announcement functionality
+        window.saveAnnouncement = saveAnnouncement;
+        window.selectResourceFromDate = selectResourceFromDate;
         
         // EXPORT NEW FUNCTION
         window.goHome = goHome;
