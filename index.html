@@ -222,6 +222,10 @@
             showResourceSelectModal: false,
             resourceSelectOptions: [],
             resourceSelectDate: '',
+            
+            // SEARCH & ADMIN STATES
+            adminSearchQuery: '',
+            viewingStudentId: null, // For student detail modal
 
             isScanning: false,
             isProcessingScan: false,
@@ -479,6 +483,84 @@
                 render();
             });
         };
+
+        // ... [Previous functions for booking, selection, etc. remain the same] ...
+        
+        // --- ADMIN SEARCH FUNCTIONS (NEW) ---
+        window.handleAdminSearch = (e) => {
+            const query = e.target.value.trim().toLowerCase();
+            window.state.adminSearchQuery = e.target.value; // Sync state
+            const resultsContainer = document.getElementById('admin-search-results');
+            
+            if (query.length < 2) {
+                resultsContainer.innerHTML = '<p class="text-center text-slate-300 text-xs py-4">พิมพ์อย่างน้อย 2 ตัวอักษรเพื่อค้นหา</p>';
+                return;
+            }
+
+            // 1. Collect unique IDs matching query
+            const matches = new Set();
+            
+            // From Whitelist
+            if (window.state.allowedStudents) {
+                window.state.allowedStudents.forEach(entry => {
+                    const id = entry.split(/[\s\t]+/)[0];
+                    if (id.includes(query)) matches.add(id);
+                });
+            }
+            
+            // From Bookings (History)
+            if (window.state.bookings) {
+                window.state.bookings.forEach(b => {
+                    if (b.studentId && b.studentId.includes(query) && b.studentId !== 'ADMIN') matches.add(b.studentId);
+                });
+            }
+
+            const uniqueIds = Array.from(matches).sort();
+
+            if (uniqueIds.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-center text-slate-300 text-xs py-4">ไม่พบข้อมูลในระบบ</p>';
+                return;
+            }
+
+            // Render Results Directly to DOM (No Full Render)
+            resultsContainer.innerHTML = uniqueIds.map(id => {
+                const name = getDisplayName(id); 
+                const history = window.state.bookings.filter(b => b.studentId === id);
+                
+                return `
+                    <button onclick="window.openStudentDetail('${id}')" class="w-full p-4 bg-white border border-slate-100 rounded-2xl hover:bg-indigo-50 hover:border-indigo-200 transition-all flex items-center justify-between group text-left shadow-sm mb-2">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-xs group-hover:bg-indigo-500 group-hover:text-white transition-colors flex-shrink-0">
+                                <i data-lucide="user" size="16"></i>
+                            </div>
+                            <div class="overflow-hidden">
+                                <p class="font-black text-slate-800 text-sm group-hover:text-indigo-700 truncate">${name}</p>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">ID: ${id}</p>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <span class="text-[9px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg group-hover:bg-white group-hover:text-indigo-500">History: ${history.length}</span>
+                        </div>
+                    </button>
+                `;
+            }).join('');
+            
+            // Re-initialize icons for newly added elements
+            lucide.createIcons();
+        };
+
+        window.openStudentDetail = (id) => {
+            window.saveScrollPosition();
+            window.state.viewingStudentId = id;
+            window.render();
+        };
+
+        window.closeStudentDetail = () => {
+            window.state.viewingStudentId = null;
+            window.render();
+        };
+
+        // ------------------------------------
 
         const selectResource = (id) => { 
             const res = window.state.resources.find(r => r.id === id);
@@ -1245,6 +1327,7 @@
                 ${renderEditResourceModal()} 
                 ${renderAnnouncementModal()}
                 ${renderResourceSelectionModal()}
+                ${renderStudentDetailModal()} <!-- NEW MODAL -->
                 ${loadingOverlay}
             `;
 
@@ -1259,6 +1342,12 @@
                      container.scrollTop = 0;
                 }
             }
+            
+            // Check for search input and restore focus if present (handled mostly by oninput logic now, but good for full re-renders)
+            const searchInput = document.getElementById('admin-search-input');
+            if (searchInput && window.state.adminSearchQuery) {
+                // Focus restoring logic if needed, but handled by separate function mostly
+            }
 
             setupScrollHint();
             lucide.createIcons();
@@ -1271,6 +1360,8 @@
             }
         }
 
+        // ... [Standard render functions for hint, login, widgets remain the same] ...
+        
         function renderScrollHint() {
             const isCalendar = window.state.view === 'calendar';
             const isSelection = !window.state.selectedResource && window.state.view !== 'login' && window.state.view !== 'scanner';
@@ -1378,7 +1469,9 @@
                 </div>
             `;
         }
-
+        
+        // ... [Public view functions remain same] ...
+        
         function renderPublicView() {
             if (window.state.view === 'public_slots') return renderPublicSlots();
             
@@ -1419,7 +1512,6 @@
             const dateStr = window.state.selectedDate;
             const todayStr = getLocalDateString(); 
             const isPastDate = dateStr < todayStr;
-            // เพิ่มการตรวจสอบวันหยุดพิเศษ
             const isClosedDate = window.state.settings.closedDates && window.state.settings.closedDates[dateStr];
 
             const slots = [];
@@ -1433,7 +1525,6 @@
                 current.setHours(current.getHours() + 1);
             }
             const res = window.state.resources.find(r => r.id === window.state.publicSelectedResourceId);
-            // แก้ไข: ไม่กรอง completed ออก เพื่อให้แสดงเป็น locked slot
             const resBookings = window.state.bookings.filter(b => b.date === dateStr && b.resourceId === res.id);
             
             const activeUserCard = renderActiveUserCard(window.state.publicSelectedResourceId);
@@ -1460,7 +1551,6 @@
                                 ${slots.map(s => {
                                     const b = resBookings.find(x => x.slot === s.start);
                                     if (b) {
-                                        // FIXED: Handle completed state display in public view
                                         if (b.status === 'completed') {
                                             return `
                                                 <div class="p-5 bg-slate-100 rounded-[2rem] border border-slate-200 flex justify-between items-center opacity-80">
@@ -1512,6 +1602,8 @@
                 </div>
             `;
         }
+        
+        // ... [User Calendar UI, Header, Menu remain same] ...
 
         function renderCalendarUI() {
             const hStart = window.state.settings.startTime;
@@ -1531,9 +1623,7 @@
                 current.setHours(current.getHours() + 1);
             }
             
-            // แก้ไข: อนุญาตให้แสดง completed ได้ในรายการของวันนี้ เพื่อให้ปุ่ม View Ticket ไม่หาย
             const myToday = window.state.bookings.filter(b => b.studentId === window.state.studentId && b.date === window.state.selectedDate && b.resourceId === window.state.selectedResource.id);
-            // แก้ไข: โควตานับรวม completed (เพราะใช้ไปแล้ว)
             const bookedDaily = window.state.bookings.filter(b => b.studentId === window.state.studentId && b.date === window.state.selectedDate).length;
             const bookedTotal = window.state.bookings.filter(b => b.studentId === window.state.studentId).length;
 
@@ -1545,7 +1635,6 @@
                          <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0"><i data-lucide="box" size="24"></i></div>
                          <div class="text-left overflow-hidden">
                             <h2 class="text-xl font-black leading-normal uppercase truncate pt-1">${window.state.selectedResource.name}</h2>
-                            <!-- Added Description Here -->
                             <p class="text-[10px] font-medium text-indigo-100 mt-0 opacity-90 truncate">${window.state.selectedResource.description || 'ไม่มีคำอธิบาย'}</p>
                          </div>
                     </div>
@@ -1572,7 +1661,6 @@
                             </button>
                         ` : ''}
 
-                        <!-- Active User Card -->
                         ${renderActiveUserCard(window.state.selectedResource.id)}
 
                         <div class="flex justify-between items-center px-2 pt-2">
@@ -1588,7 +1676,6 @@
                         ` : !isServiceAvailable(window.state.selectedDate) ? `<div class="p-12 bg-orange-50 rounded-[2.5rem] text-center border-2 border-dashed border-orange-200 font-bold text-orange-700 text-sm uppercase">ไม่เปิดให้บริการในวันนี้</div>` : `
                             <div id="slots-container" class="grid grid-cols-1 gap-2.5">
                                 ${slots.map(s => {
-                                    // แก้ไข: เอา completed ออกจากตัวกรอง เพื่อให้นับว่าคนอื่นจองไปแล้ว (แม้จะใช้เสร็จแล้วก็ตาม)
                                     const bOthers = window.state.bookings.find(b => b.date === window.state.selectedDate && b.slot === s.start && b.resourceId === window.state.selectedResource.id && b.studentId !== window.state.studentId);
                                     const bMine = window.state.bookings.find(b => b.date === window.state.selectedDate && b.slot === s.start && b.resourceId === window.state.selectedResource.id && b.studentId === window.state.studentId);
                                     const isSelecting = window.state.selectedSlots.some(sel => sel.start === s.start);
@@ -1601,7 +1688,6 @@
                                     if (bOthers) { 
                                         if (bOthers.status === 'completed') {
                                             btnClass = "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"; 
-                                            // FIXED: Show ID in completed status
                                             sText = `ใช้งานเสร็จสิ้น (${getDisplayName(bOthers.studentId)})`; 
                                             act = ""; 
                                             icon = '<i data-lucide="check-circle" size="14"></i>';
@@ -1614,7 +1700,6 @@
                                     } else if (bMine) { 
                                         if (bMine.status === 'completed') {
                                             btnClass = "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed";
-                                            // FIXED: Show ID in completed status for self too
                                             sText = `ใช้งานเสร็จสิ้น (${getDisplayName(bMine.studentId)})`;
                                             act = ""; 
                                             icon = '<i data-lucide="check-circle" size="16"></i>';
@@ -1747,7 +1832,7 @@
                              </button>
                          </div>
                     </div>
-
+                    
                     ${!isSystemOpen ? `
                         <div class="bg-red-50 p-6 rounded-[2rem] border-2 border-red-100 shadow-sm text-center animate-pulse">
                             <div class="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -1798,66 +1883,6 @@
                                 <i data-lucide="chevron-right" size="20" class="text-slate-200 group-hover:text-indigo-600 transition-all flex-shrink-0"></i>
                             </button>
                         `).join('')}
-                    </div>
-
-                    <!-- History Section -->
-                    <div class="pt-8 border-t border-slate-100 mt-4">
-                        <div class="flex justify-between items-center px-2 mb-4">
-                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">ประวัติการจองของฉัน (${myBookings.length})</div>
-                        </div>
-
-                        ${myBookings.length === 0 ? 
-                            `<div class="text-center py-8 opacity-40 text-xs font-bold text-slate-300">ไม่มีประวัติการจอง</div>` : 
-                            `<div class="space-y-3">
-                                ${myBookings.map(b => {
-                                    const isExpanded = window.state.expandedHistoryId === b.id;
-                                    const statusColors = {
-                                        'booked': 'text-indigo-500 bg-indigo-50 border-indigo-100',
-                                        'checked_in': 'text-green-500 bg-green-50 border-green-100',
-                                        'completed': 'text-slate-500 bg-slate-50 border-slate-100'
-                                    };
-                                    const statusText = {
-                                        'booked': 'รอเข้าใช้งาน',
-                                        'checked_in': 'เข้าใช้งานแล้ว',
-                                        'completed': 'สำเร็จ'
-                                    };
-                                    const sColor = statusColors[b.status] || 'text-slate-500 bg-slate-50';
-                                    const sText = statusText[b.status] || b.status;
-                                    
-                                    return `
-                                        <div onclick="window.toggleHistoryItem('${b.id}')" class="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm active:scale-[0.99] transition-all cursor-pointer relative overflow-hidden group">
-                                            <div class="flex justify-between items-start">
-                                                <div>
-                                                    <div class="font-bold text-slate-700 text-sm">${b.resourceName}</div>
-                                                    <div class="text-[10px] font-bold text-slate-400 mt-1">${formatDateTH(b.date)} | ${b.slot} - ${b.slot_end || addMinutes(b.slot, 59)}</div>
-                                                </div>
-                                                <div class="px-2 py-1 rounded-lg text-[8px] font-bold uppercase tracking-wider border ${sColor}">
-                                                    ${sText}
-                                                </div>
-                                            </div>
-                                            
-                                            ${isExpanded ? `
-                                                <div class="mt-4 pt-4 border-t border-slate-50 animate-in slide-in-from-top-2 fade-in duration-200">
-                                                    <!-- Added Booking Time -->
-                                                    <div class="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1">
-                                                        <span>ทำรายการเมื่อ</span>
-                                                        <span>${formatDateTime(b.createdAt)}</span>
-                                                    </div>
-                                                    <div class="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1">
-                                                        <span>Check-in</span>
-                                                        <span>${formatDateTime(b.checkInAt)}</span>
-                                                    </div>
-                                                    <div class="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                                                        <span>Check-out</span>
-                                                        <span>${formatDateTime(b.checkOutAt)}</span>
-                                                    </div>
-                                                </div>
-                                            ` : ''}
-                                        </div>
-                                    `;
-                                }).join('')}
-                            </div>`
-                        }
                     </div>
                 </div>
             `;
@@ -1980,6 +2005,7 @@
         function renderAdminUI() {
             const activeDates = [...new Set(window.state.bookings.map(b => b.date))].sort();
             const closedDates = window.state.settings.closedDates || {};
+            const searchValue = window.state.adminSearchQuery || '';
             
             return `
                 <div class="space-y-8 page-transition pb-32 text-left">
@@ -1999,7 +2025,20 @@
                         </div>
                     </section>
                     
-                    <!-- NEW: Announcement Settings -->
+                    <!-- NEW SEARCH SECTION -->
+                    <section class="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100 space-y-4">
+                        <h2 class="text-xl font-black text-slate-800 flex items-center gap-3"><i data-lucide="search" class="text-indigo-600"></i> ค้นหาข้อมูลนักศึกษา</h2>
+                        <div class="relative">
+                            <input type="text" id="admin-search-input" value="${searchValue}" oninput="window.handleAdminSearch(event)" placeholder="พิมพ์รหัสนักศึกษา (เช่น 65...)" class="w-full p-4 pl-12 rounded-2xl bg-slate-50 border-2 border-slate-100 font-bold text-lg outline-none focus:border-indigo-500 shadow-inner transition-all">
+                            <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        </div>
+                        <div id="admin-search-results" class="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                            <!-- Results will be injected here via JS -->
+                            ${searchValue.length > 0 ? '' : '<p class="text-center text-slate-300 text-xs py-4">พิมพ์อย่างน้อย 2 ตัวอักษรเพื่อค้นหา</p>'}
+                        </div>
+                    </section>
+                    
+                    <!-- Announcement Settings -->
                     <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-4 text-left">
                          <h2 class="text-xl font-black text-slate-800 flex items-center gap-3 text-left leading-none"><i data-lucide="megaphone" class="text-indigo-600"></i> ประกาศ / วิธีใช้งาน</h2>
                          <form onsubmit="window.saveAnnouncement(event)" class="space-y-3">
@@ -2032,7 +2071,7 @@
                             }
                         </div>
                     </section>
-
+                    
                     <section class="bg-slate-900 p-8 rounded-[2.5rem] shadow-xl space-y-6">
                         <div class="flex justify-between items-center">
                             <h2 class="text-xl font-black text-white flex items-center gap-3"><i data-lucide="users-round" class="text-indigo-400"></i> Student Whitelist</h2>
@@ -2049,7 +2088,7 @@
                         </form>
                     </section>
                     
-                    <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-8 text-left">
+                    <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6 text-left">
                         <h2 class="text-xl font-black text-slate-800 flex items-center gap-3 text-left leading-none"><i data-lucide="settings-2" class="text-indigo-600"></i> Project Settings</h2>
                         <form onsubmit="window.saveSettings(event)" class="grid grid-cols-1 md:grid-cols-2 gap-6 leading-none text-left">
                             <div class="md:col-span-2 space-y-2 text-left"><label class="text-[10px] font-bold uppercase text-slate-400 ml-3 text-left">Project Name</label><input name="projectName" type="text" value="${window.state.settings.projectName}" class="w-full p-4 rounded-2xl bg-slate-50 border-2 border-slate-100 font-bold outline-none focus:border-indigo-500 shadow-inner text-left" required></div>
@@ -2179,6 +2218,89 @@
                         </div>
                     </div>
                 </footer>
+            `;
+        }
+        
+        // --- NEW: Student Detail Modal (For Admin Search) ---
+        function renderStudentDetailModal() {
+            if (!window.state.viewingStudentId) return "";
+            
+            const id = window.state.viewingStudentId;
+            const name = getDisplayName(id);
+            const history = window.state.bookings.filter(b => b.studentId === id).sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            
+            const total = history.length;
+            const completed = history.filter(b => b.status === 'completed').length;
+            const active = history.filter(b => b.status === 'checked_in').length;
+            
+            return `
+                <div class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[9999] flex items-center justify-center p-6 page-transition">
+                    <div class="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl border border-white relative flex flex-col max-h-[90vh]">
+                        
+                        <!-- Header -->
+                        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 rounded-t-[2.5rem]">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg">
+                                    <i data-lucide="user" size="24"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-black text-slate-800 leading-none">${name}</h3>
+                                    <p class="text-xs text-slate-400 font-bold uppercase mt-1">ID: ${id}</p>
+                                </div>
+                            </div>
+                            <button onclick="window.closeStudentDetail()" class="w-10 h-10 bg-white text-slate-800 rounded-xl shadow-sm flex items-center justify-center border border-slate-200 active:scale-90 transition-transform"><i data-lucide="x" size="20"></i></button>
+                        </div>
+                        
+                        <div class="p-6 overflow-y-auto custom-scrollbar">
+                            <!-- Stats Cards -->
+                            <div class="grid grid-cols-3 gap-3 mb-6">
+                                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center">
+                                    <p class="text-[9px] font-bold text-slate-400 uppercase">Total</p>
+                                    <p class="text-xl font-black text-slate-800 mt-1">${total}</p>
+                                </div>
+                                <div class="p-4 bg-green-50 rounded-2xl border border-green-100 text-center">
+                                    <p class="text-[9px] font-bold text-green-500 uppercase">Success</p>
+                                    <p class="text-xl font-black text-green-600 mt-1">${completed}</p>
+                                </div>
+                                <div class="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 text-center">
+                                    <p class="text-[9px] font-bold text-indigo-500 uppercase">Active</p>
+                                    <p class="text-xl font-black text-indigo-600 mt-1">${active}</p>
+                                </div>
+                            </div>
+                            
+                            <!-- History Table -->
+                             <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Booking History</h4>
+                             <div class="space-y-2">
+                                ${history.length === 0 ? '<div class="p-8 text-center text-slate-300 text-xs bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">ไม่พบประวัติการจอง</div>' : 
+                                    history.map(b => {
+                                        const statusColor = b.status === 'completed' ? 'bg-slate-100 text-slate-400' : b.status === 'checked_in' ? 'bg-green-100 text-green-600' : 'bg-indigo-50 text-indigo-600';
+                                        
+                                        return `
+                                        <div class="p-4 border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors">
+                                            <div class="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <p class="text-sm font-bold text-slate-700">${b.resourceName}</p>
+                                                    <p class="text-[10px] text-slate-400 font-bold uppercase mt-0.5">${formatDateTH(b.date)} | ${b.slot} - ${b.slot_end || addMinutes(b.slot, 59)}</p>
+                                                </div>
+                                                <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider ${statusColor}">${b.status}</span>
+                                            </div>
+                                            <div class="flex items-center gap-4 pt-2 border-t border-slate-50 mt-2">
+                                                <div class="flex-1">
+                                                    <p class="text-[8px] text-slate-300 font-bold uppercase">In</p>
+                                                    <p class="text-[10px] font-bold text-slate-600">${formatTimeOnly(b.checkInAt)}</p>
+                                                </div>
+                                                <div class="flex-1 text-right">
+                                                    <p class="text-[8px] text-slate-300 font-bold uppercase">Out</p>
+                                                    <p class="text-[10px] font-bold text-slate-600">${formatTimeOnly(b.checkOutAt)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `}).join('')
+                                }
+                             </div>
+                        </div>
+                    </div>
+                </div>
             `;
         }
 
@@ -2395,6 +2517,8 @@
         
         // EXPORT NEW FUNCTION
         window.goHome = goHome;
+        window.openStudentDetail = openStudentDetail;
+        window.closeStudentDetail = closeStudentDetail;
     </script>
 </body>
 </html>
