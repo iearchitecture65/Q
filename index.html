@@ -1884,6 +1884,66 @@
                             </button>
                         `).join('')}
                     </div>
+
+                    <!-- History Section (Restored from index 76) -->
+                    <div class="pt-8 border-t border-slate-100 mt-4">
+                        <div class="flex justify-between items-center px-2 mb-4">
+                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">ประวัติการจองของฉัน (${myBookings.length})</div>
+                        </div>
+
+                        ${myBookings.length === 0 ? 
+                            `<div class="text-center py-8 opacity-40 text-xs font-bold text-slate-300">ไม่มีประวัติการจอง</div>` : 
+                            `<div class="space-y-3">
+                                ${myBookings.map(b => {
+                                    const isExpanded = window.state.expandedHistoryId === b.id;
+                                    const statusColors = {
+                                        'booked': 'text-indigo-500 bg-indigo-50 border-indigo-100',
+                                        'checked_in': 'text-green-500 bg-green-50 border-green-100',
+                                        'completed': 'text-slate-500 bg-slate-50 border-slate-100'
+                                    };
+                                    const statusText = {
+                                        'booked': 'รอเข้าใช้งาน',
+                                        'checked_in': 'เข้าใช้งานแล้ว',
+                                        'completed': 'สำเร็จ'
+                                    };
+                                    const sColor = statusColors[b.status] || 'text-slate-500 bg-slate-50';
+                                    const sText = statusText[b.status] || b.status;
+                                    
+                                    return `
+                                        <div onclick="window.toggleHistoryItem('${b.id}')" class="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm active:scale-[0.99] transition-all cursor-pointer relative overflow-hidden group">
+                                            <div class="flex justify-between items-start">
+                                                <div>
+                                                    <div class="font-bold text-slate-700 text-sm">${b.resourceName}</div>
+                                                    <div class="text-[10px] font-bold text-slate-400 mt-1">${formatDateTH(b.date)} | ${b.slot} - ${b.slot_end || addMinutes(b.slot, 59)}</div>
+                                                </div>
+                                                <div class="px-2 py-1 rounded-lg text-[8px] font-bold uppercase tracking-wider border ${sColor}">
+                                                    ${sText}
+                                                </div>
+                                            </div>
+                                            
+                                            ${isExpanded ? `
+                                                <div class="mt-4 pt-4 border-t border-slate-50 animate-in slide-in-from-top-2 fade-in duration-200">
+                                                    <!-- Added Booking Time -->
+                                                    <div class="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1">
+                                                        <span>ทำรายการเมื่อ</span>
+                                                        <span>${formatDateTime(b.createdAt)}</span>
+                                                    </div>
+                                                    <div class="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1">
+                                                        <span>Check-in</span>
+                                                        <span>${formatDateTime(b.checkInAt)}</span>
+                                                    </div>
+                                                    <div class="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                                                        <span>Check-out</span>
+                                                        <span>${formatDateTime(b.checkOutAt)}</span>
+                                                    </div>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>`
+                        }
+                    </div>
                 </div>
             `;
         }
